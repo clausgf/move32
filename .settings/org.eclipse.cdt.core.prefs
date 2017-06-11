@@ -1,6 +1,0 @@
-eclipse.preferences.version=1
-environment/project/ilg.gnuarmeclipse.managedbuild.cross.toolchain.base.977201867/PATH/delimiter=\:
-environment/project/ilg.gnuarmeclipse.managedbuild.cross.toolchain.base.977201867/PATH/operation=append
-environment/project/ilg.gnuarmeclipse.managedbuild.cross.toolchain.base.977201867/PATH/value=${PATH}\:/usr/local/bin
-environment/project/ilg.gnuarmeclipse.managedbuild.cross.toolchain.base.977201867/append=true
-environment/project/ilg.gnuarmeclipse.managedbuild.cross.toolchain.base.977201867/appendContributed=true
