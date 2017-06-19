@@ -36,4 +36,7 @@
 *.hex
 *.bak
 *~
-**/build
+.idea
+build
+cmake-build-*
+
