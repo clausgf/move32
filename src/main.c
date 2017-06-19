@@ -455,6 +455,10 @@ void led0Set(GPIO_PinState state) {
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, state);
 }
 
+void led0Toggle() {
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_4);
+}
+
 /**
  * Set state of LED0 (pin PB3
  * @param state GPIO_PIN_SET or GPIO_PIN_RESET)
@@ -463,12 +467,20 @@ void led1Set(GPIO_PinState state) {
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, state);
 }
 
+void led1Toggle() {
+    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_3);
+}
+
 /**
  * Set state of external beeper output (pin PA12)
  * @param state GPIO_PIN_SET or GPIO_PIN_RESET
  */
 void beeperSet(GPIO_PinState state) {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, state);
+}
+
+void beeperToggle() {
+    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_12);
 }
 
 /**
@@ -567,9 +579,9 @@ void rxUpdateCallback(uint8_t rxChannel, uint16_t pulseLenUs) {
     if (rxChannel < SERVOS_MAX) {
         servoWrite(rxChannel, pulseLenUs);
     }
-//    for (int i = 0; i < SERVOS_MAX && i < RX_MAX_CHANNEL; i++) {
-//        servoWrite(i, rxRead(i));
-//    }
+    if (rxChannel == SERVOS_MAX-1) {
+
+    }
 }
 
 
@@ -589,29 +601,25 @@ int main(void) {
     servosInit();
     rxInit();
 
-    printf("Hello World, it's %lu local time!\n", SystemCoreClock);
+    // rc input servo channels are now processed in the background
+    // by peripherals, in ISRs and in rxUpdateCallback
+
+    // debug output
+    printf("\nSystemCoreClock = %lu\n", SystemCoreClock);
 
     // **********************************************************************
 
+    // the main loop just provides some debug output
+    // it could also monitor the rx input channels for failsafe conditions
+    led0Set(GPIO_PIN_SET); // this switches the led off
     while (1) {
-        for (uint16_t pos = 1000; pos <= 2000; pos += 100) {
-            serialOut("%ld  0:%04d 1:%04d 2:%04d 3:%04d 4:%04d 5:%04d 6:%04d 7:%04d\n",
-                      HAL_GetTick(),
-                      rxRead(0), rxRead(1), rxRead(2), rxRead(3),
-                      rxRead(4), rxRead(5), rxRead(6), rxRead(7));
-            //serialOut("%8x %8x %8x %8x  %8x %d\n", &htim1, &htim2, &htim3, &htim4, forTimer, forChannel);
-            //serialOut("%4x %4x %4x\n", rxChannels[0].pulseStartTime, rxChannels[0].pulseEndTime, rxChannels[0].pulseLength);
-            //serialOut("%4x %4x %4x\n", rxChannels[4].pulseStartTime, rxChannels[4].pulseEndTime, rxChannels[4].pulseLength);
-            for (int servo = 0; servo < 6; servo++)
-                servoWrite(servo, 1000);
+        printf("%ld  0:%04d 1:%04d 2:%04d 3:%04d 4:%04d 5:%04d 6:%04d 7:%04d\n",
+                  HAL_GetTick(),
+                  rxRead(0), rxRead(1), rxRead(2), rxRead(3),
+                  rxRead(4), rxRead(5), rxRead(6), rxRead(7));
 
-            HAL_GPIO_WritePin(LED0_GPIO_Port, LED0_Pin, GPIO_PIN_SET);
-            HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-            for (int i = 0; i < 200e3; i++);
-            HAL_GPIO_WritePin(LED0_GPIO_Port, LED0_Pin, GPIO_PIN_RESET);
-            HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-            HAL_Delay(500);
-        }
+        led1Toggle();
+        HAL_Delay(500);
     }
 
 }

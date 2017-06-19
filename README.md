@@ -1,9 +1,34 @@
-# About
+# Naze32 for robotics!
 
+This project is based on cheap, small and light STM32F1 based Naze32 
+flight controller  board used in radio controlled drones (multicopters). 
+It provides a simple to understand basis for creating real time software 
+on the Naze32 and similar ARM Cortex based boards. It is intended for
+controlling robots with multiple servos or autonomous model cars, but
+could serve other purposes as well.
 
+The project provides the following features:
+- Cmake based build system from https://github.com/ObKo/stm32-cmake
+- implementation of newlibc system calls for bare metal programming
+- application of STHAL
+- generation of pwm pulses for rc servos or speed controllers using
+  timer channels in pwm mode
+- decoding pulses from a rc receiver using timer channels 
+  in input capture mode and timer interrupts
+- communication via the serial port for debugging
 
-The cmake based build system is from https://github.com/ObKo/stm32-cmake
-- thanks a lot!
+In its current state, this project could serve as an example.
+To make it really useful, you have to adapt it to your 
+application:
+- The software is currently configured for 6 servo outputs and 8 rx input 
+channels. If you need more servo outputs (e.g. for your multi-arm robot),
+your can convert any rx input to a servo output, i.e. you could control 
+a maximum of 14 servos.
+- In robotics, you would use your Naze32 to for i/o with exact timing.
+High-level functions would typically be realized on a more powerful board
+like a Raspberry Pi or a smartphone. The serial interface could be used
+for communication, e.g. for processing rc inputs and setting servo output.
+Other interfaces like I2C and SPI are available as well.
 
 
 ### Setup
