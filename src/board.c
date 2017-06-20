@@ -4,6 +4,8 @@
  * Copyright (c) 2017 clausgf. For further info, refer to https://github.com/clausgf/move32
  */
 
+#include <string.h>
+
 #include "board.h"
 
 
@@ -109,7 +111,7 @@ void serialInit(void) {
 
     // initialize UART
     huart1.Instance = USART1;
-    huart1.Init.BaudRate = 9600;
+    huart1.Init.BaudRate = 115200; // 9600;
     huart1.Init.WordLength = UART_WORDLENGTH_8B;
     huart1.Init.StopBits = UART_STOPBITS_1;
     huart1.Init.Parity = UART_PARITY_NONE;

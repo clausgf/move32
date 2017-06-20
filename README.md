@@ -58,10 +58,15 @@ flashing otherwise when at least one servo signal has fallen back
 to the rc receiver.
 
 
-## Serial protocol
+## Serial interface
 
-- The data type for servo positions is the underlying pulse length in 
-microseconds. Some values: 1000 (left) - 1500 (middle) - 2000 (right).
+- Parameters for the serial interface: 115200 Baud, 8N1
+- Commands are not echoed while typing, but confirmed after 
+  hitting Enter. The status after entering a command is 
+  either _ok_ or _error_.
+- The data type for servo positions is the underlying pulse 
+  length in microseconds.
+  Important values: 1000 (left) - 1500 (middle) - 2000 (right).
 
 ### Examples
 
@@ -92,6 +97,9 @@ servos 2000 1500 1000 1100 0 0
 ##### Autonomous mode controlled by the serial interface with rc fallback
 ```
 # configuration (optional)
+# failsafe positions for servos if rx fails
+failsafe 0 1000
+failsafe 1 1500
 # configure default servo output from rx channel (for fallback)
 rx_for_servo 0 0
 rx_for_servo 1 1
@@ -99,13 +107,15 @@ rx_for_servo 1 1
 fallback_timeout 200
 # fallback if rx channel 2 < 1500
 fallback_force 2 0 1500
-# fallback if rx channel 2 > 1500 or after 200 ms
+# fallback if rx channel 2 > 1500 
 fallback_force 2 1 1500
-# failsafe positions for servos if rx fails
-failsafe 0 1500
-failsafe 1 1500
-# optional: auto transmit received data
+
+# auto transmit received data on new data (usually every 20 ms)
 autorx 1
+# alternative: auto transmit received data every 1000 ms
+autorx 1000
+# alternative: auto transmit off
+autorx 0
 
 # cyclic communication starts here
 # set desired output (ignored if in fallback or failsafe mode)
@@ -115,13 +125,13 @@ rx
 # ...
 ```
 
-### Specification
+### Protocol specification
 
 tbd
 
-## Compilation, Flashing & Setup
+## Setup, Compilation & Flashing
 
-### Prerequisites
+### Development environment
 I use JetBrains CLion 2017.1 on MacOS for development, other operating systems
 or IDEs or even vi should work as well.
 I prepared my system in these steps:
@@ -142,7 +152,7 @@ I prepared my system in these steps:
   ```
 - Get a tool for flashing the controller. I got stm32flash from 
   https://sourceforge.net/projects/stm32flash/
-- Although not strictly necessary, terminal program (I used CoolTerm)
+- Although not strictly necessary, a terminal program (I used CoolTerm)
   will be useful for debugging.
 
 ### Build
