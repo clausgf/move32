@@ -173,6 +173,7 @@ SYSCALL_FATTR int _fstat(int file, struct stat *st) {
 /**
  * Minimal implemetation for reading a character from a file. Reading
  * STDIN reads form the UART, and reading other files results in an error.
+ * The read timeout is 100 Ticks.
  */
 SYSCALL_FATTR int _read(int file, char *ptr, int len) {
     int result;
@@ -198,6 +199,11 @@ SYSCALL_FATTR int _write(int file, char *ptr, int len) {
     case STDOUT_FILENO:
     case STDERR_FILENO:
         HAL_UART_Transmit(syscall_UART_handle_ptr, (uint8_t *)ptr, len, 100);
+        // the following implementation leads to a race condition e.g. when a second
+        // call to printf() while the DMA is in progress overwrites its buffer
+        //while (HAL_BUSY == HAL_UART_Transmit_DMA(syscall_UART_handle_ptr, (uint8_t *)ptr, len)) {
+        //    // busy waiting
+        //}
         break;
     default:
         errno = EBADF;
