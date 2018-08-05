@@ -30,12 +30,17 @@ extern void rxUpdateCallbackFromIsr(uint8_t rxChannel, uint16_t pulseLenUs);
 
 /**
  * Hardware abstraction to decode input signals (channels) from the
- * rc receiver (rx) via input capture
+ * rc receiver (rx) via input capture.
  */
 class Receiver {
 public:
 
-    Receiver() { }
+    enum RECEIVER_TYPE_E { FULL=0, CPPM=1 };
+
+    Receiver():
+        mReceiverType(FULL),
+        mCppmChannelIndex(0)
+    { }
 
     /**
      * Initialize all rx channel inputs, including GPIO pins and timers.
@@ -79,6 +84,10 @@ public:
 
         mTimeoutMs = 50;
     }
+
+    enum RECEIVER_TYPE_E getReceiverType() { return mReceiverType; }
+
+    void setReceiverType(enum RECEIVER_TYPE_E receiverType) { mReceiverType = receiverType; }
 
     uint32_t getTimeout(void) { return mTimeoutMs; }
 
@@ -124,6 +133,69 @@ public:
      * @param hTimer
      */
     void onTimerEventFromIsr(TIM_HandleTypeDef *hTimer) {
+
+        switch (mReceiverType) {
+            case FULL:
+                decodeFullPwm(hTimer);
+                break;
+
+            case CPPM:
+                decodeCppm(hTimer);
+                break;
+        }
+    }
+
+
+private:
+
+    enum RECEIVER_TYPE_E mReceiverType;
+    int mCppmChannelIndex;
+
+    /// structure to control decoding a channel of a receiver
+    typedef struct {
+        TIM_HandleTypeDef *hTimer;  //< timer for this rx input
+        uint32_t timerChannel;      //< timer channel for this rx input
+        uint32_t timerActiveChannel;//< timer active channel for this rx input
+        bool wasRisingEdgeDetected; //< flag to remember whether the last ic event
+        uint16_t pulseStartTime;    //< timer/counter value of last rising edge
+        uint16_t pulseEndTime;      //< timer/counter value of last falling edge
+        uint16_t pulseLength;       //< length of pulse (us)
+        uint32_t lastUpdateTime;    //< system ticker (ms) of last update
+    } rxChannel_t;
+
+    rxChannel_t mChannels[RX_MAX_CHANNEL];
+
+    uint32_t mTimeoutMs;
+
+
+    /**
+     *
+     * @param rxChannel Index of the rx channel to initialize from [0, RX_MAX_CHANNEL[
+     * @param hTimer STHAL handle for the timer, e.g. htim1
+     * @param timerChannel STHAL constant for the timer channel
+     *        (which is *not* the channel number),
+     *        e.g. TIM_CHANNEL_1
+     * @param timerActiveChannel STHAL constant for the timer "active channel",
+     *        which to the author's understanding is a different constant
+     *        referencing the same timer channel as timerChannel. Constants are
+     *        HAL_TIM_ACTIVE_CHANNEL_1 etc. from the HAL_TIM_ActiveChannel enum.
+     */
+    void rxChannelInit(uint8_t rxChannel,
+            TIM_HandleTypeDef *hTimer,
+            uint32_t timerChannel,
+            uint32_t timerActiveChannel) {
+        mChannels[rxChannel].hTimer = hTimer;
+        mChannels[rxChannel].timerChannel = timerChannel;
+        mChannels[rxChannel].timerActiveChannel = timerActiveChannel;
+        mChannels[rxChannel].wasRisingEdgeDetected = false;
+        mChannels[rxChannel].pulseStartTime = 0;
+        mChannels[rxChannel].pulseEndTime = 0;
+        mChannels[rxChannel].pulseLength = 0;
+        icInit(hTimer, timerChannel, TIM_ICPOLARITY_RISING);
+    }
+
+
+    void decodeFullPwm(TIM_HandleTypeDef *hTimer) {
         for (uint8_t rxChannelIndex = 0; rxChannelIndex < RX_MAX_CHANNEL; rxChannelIndex++) {
             rxChannel_t *channelPtr = &mChannels[rxChannelIndex];
             // check whether the IRQ was generated for this timer and channel
@@ -154,50 +226,41 @@ public:
     }
 
 
-private:
-
-    /// structure to control decoding a channel of a receiver
-    typedef struct {
-        TIM_HandleTypeDef *hTimer;  //< timer for this rx input
-        uint32_t timerChannel;      //< timer channel for this rx input
-        uint32_t timerActiveChannel;//< timer active channel for this rx input
-        bool wasRisingEdgeDetected; //< flag to remember whether the last ic event
-        uint16_t pulseStartTime;    //< timer/counter value of last rising edge
-        uint16_t pulseEndTime;      //< timer/counter value of last falling edge
-        uint16_t pulseLength;       //< length of pulse (us)
-        uint32_t lastUpdateTime;    //< system ticker (ms) of last update
-    } rxChannel_t;
-
-    rxChannel_t mChannels[RX_MAX_CHANNEL];
-
-    uint32_t mTimeoutMs;
-
-
-
-    /**
-     *
-     * @param rxChannel Index of the rx channel to initialize from [0, RX_MAX_CHANNEL[
-     * @param hTimer STHAL handle for the timer, e.g. htim1
-     * @param timerChannel STHAL constant for the timer channel
-     *        (which is *not* the channel number),
-     *        e.g. TIM_CHANNEL_1
-     * @param timerActiveChannel STHAL constant for the timer "active channel",
-     *        which to the author's understanding is a different constant
-     *        referencing the same timer channel as timerChannel. Constants are
-     *        HAL_TIM_ACTIVE_CHANNEL_1 etc. from the HAL_TIM_ActiveChannel enum.
-     */
-    void rxChannelInit(uint8_t rxChannel,
-            TIM_HandleTypeDef *hTimer,
-            uint32_t timerChannel,
-            uint32_t timerActiveChannel) {
-        mChannels[rxChannel].hTimer = hTimer;
-        mChannels[rxChannel].timerChannel = timerChannel;
-        mChannels[rxChannel].timerActiveChannel = timerActiveChannel;
-        mChannels[rxChannel].wasRisingEdgeDetected = false;
-        mChannels[rxChannel].pulseStartTime = 0;
-        mChannels[rxChannel].pulseEndTime = 0;
-        mChannels[rxChannel].pulseLength = 0;
-        icInit(hTimer, timerChannel, TIM_ICPOLARITY_RISING);
+    void decodeCppm(TIM_HandleTypeDef *hTimer) {
+        if (hTimer == mChannels[0].hTimer && hTimer->Channel == mChannels[0].timerActiveChannel) {
+            uint32_t nextPolarity;
+            if (mChannels[0].wasRisingEdgeDetected) {
+                // rising edge already detected, this is the falling edge
+                mChannels[0].pulseEndTime = HAL_TIM_ReadCapturedValue(hTimer, mChannels[0].timerChannel);
+                mChannels[0].wasRisingEdgeDetected = false;
+                nextPolarity = TIM_ICPOLARITY_RISING;
+                // save the detected pulse
+                uint16_t pulseLength = mChannels[0].pulseEndTime - mChannels[0].pulseStartTime;
+                uint32_t lastUpdateTime = HAL_GetTick();
+                if (pulseLength > 3000) {
+                    // abnormally long pulse ==> sync, restart with channel 0
+                    mCppmChannelIndex = 0;
+                } else {
+                    // regular pulse length, store the result
+                    if (mCppmChannelIndex < RX_MAX_CHANNEL) {
+                        mChannels[mCppmChannelIndex].pulseLength = pulseLength;
+                        mChannels[mCppmChannelIndex].lastUpdateTime = lastUpdateTime;
+                        rxUpdateCallbackFromIsr(mCppmChannelIndex, pulseLength);
+                        mCppmChannelIndex += 1;
+                    }
+                }
+            } else {
+                // this is the rising edge
+                mChannels[0].pulseStartTime = HAL_TIM_ReadCapturedValue(hTimer, mChannels[0].timerChannel);
+                mChannels[0].wasRisingEdgeDetected = true;
+                nextPolarity = TIM_ICPOLARITY_FALLING;
+            }
+            // reconfigure for next edge:
+            // another unexpected, annoying HAL "feature": reconfiguration
+            // using HAL_TIM_IC_ConfigChannel requires HAL_TIM_IC_Start_IT;
+            // thus just call icInit for reconfiguration
+            icInit(mChannels[0].hTimer, mChannels[0].timerChannel, nextPolarity);
+        }
     }
 
 };
