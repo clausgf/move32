@@ -35,10 +35,10 @@ extern void rxUpdateCallbackFromIsr(uint8_t rxChannel, uint16_t pulseLenUs);
 class Receiver {
 public:
 
-    enum RECEIVER_TYPE_E { FULL=0, CPPM=1 };
+    enum RECEIVER_TYPE_E { RECEIVER_TYPE_FULL=0, RECEIVER_TYPE_CPPM=1 };
 
     Receiver():
-        mReceiverType(FULL),
+        mReceiverType(RECEIVER_TYPE_FULL),
         mCppmChannelIndex(0)
     { }
 
@@ -135,11 +135,11 @@ public:
     void onTimerEventFromIsr(TIM_HandleTypeDef *hTimer) {
 
         switch (mReceiverType) {
-            case FULL:
+            case RECEIVER_TYPE_FULL:
                 decodeFullPwm(hTimer);
                 break;
 
-            case CPPM:
+            case RECEIVER_TYPE_CPPM:
                 decodeCppm(hTimer);
                 break;
         }
