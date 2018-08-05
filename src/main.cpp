@@ -107,7 +107,7 @@ void setServoFromHost(uint8_t index, uint16_t pulseLenUs) {
     }
 }
 
-void rxUpdateCallback(uint8_t rxChannel, uint16_t pulseLenUs) {
+void rxUpdateCallbackFromIsr(uint8_t rxChannel, uint16_t pulseLenUs) {
     if (rxChannel < RX_MAX_CHANNEL) {
         for (int servo=0; servo<SERVOS_MAX; servo++) {
             if ( (servoMode[servo] == SERVO_MODE_RX) && (rxForServo[servo] == rxChannel)) {

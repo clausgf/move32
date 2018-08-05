@@ -19,7 +19,13 @@
 #define RX_MAX_CHANNEL 8
 
 
-extern void rxUpdateCallback(uint8_t rxChannel, uint16_t pulseLenUs);
+/**
+ * This routine is called from the input capture ISR when a new pulse length
+ * is available. It has to be implemented outside this module by the user.
+ * @param rxChannel Rx channel index from [0, RX_MAX_CHANNEL[
+ * @param pulseLenUs Pulse length in us
+ */
+extern void rxUpdateCallbackFromIsr(uint8_t rxChannel, uint16_t pulseLenUs);
 
 
 /**
@@ -112,14 +118,6 @@ public:
         return ret;
     }
 
-    /**
-     * This routine is called from the input capture ISR when a new pulse length
-     * is available. It has to be implemented outside this module by the user.
-     * @param rxChannel Rx channel index from [0, RX_MAX_CHANNEL[
-     * @param pulseLenUs Pulse length in us
-     */
-    void updateChannelFromIsr(uint8_t rxChannel, uint16_t pulseLenUs) {}
-
 
     /**
      * Called from the input capture ISR when an edge has beed detected.
@@ -150,7 +148,7 @@ public:
                 // thus just call icInit for reconfiguration
                 icInit(channelPtr->hTimer, channelPtr->timerChannel, nextPolarity);
 
-                updateChannelFromIsr(rxChannelIndex, channelPtr->pulseLength);
+                rxUpdateCallbackFromIsr(rxChannelIndex, channelPtr->pulseLength);
             }
         }
     }
