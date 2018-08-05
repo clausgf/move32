@@ -353,6 +353,10 @@ public:
 
     void init() { }
 
+    uint32_t getTicks() const {
+        return HAL_GetTick();
+    }
+
     void reset() {
         NVIC_SystemReset();
     }

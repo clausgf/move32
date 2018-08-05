@@ -9,6 +9,8 @@
 #include <ctype.h>
 #include <stdlib.h>
 
+#include <algorithm>
+
 #include "board.h"
 #include "servos.h"
 #include "receiver.h"
@@ -133,202 +135,145 @@ void transmitRx() {
 // Command handling
 // **************************************************************************
 
+bool show_help(const Command & cmd);
 
-#define CMD_ARGS_MAX 16
-uint16_t cmdArgs[CMD_ARGS_MAX];
+Command commands[] {
+    Command("servos", SERVOS_MAX,
+            "Set pulse length for all servos in HOST_MODE (SERVOS_MAX parameters: pulseLenUs)",
+            [](const Command & cmd) {
+                bool cmdOk = true;
+                for (uint8_t i=0; i<SERVOS_MAX; i++) {
+                    cmdOk &= (cmd.getParameter(i) <= 3000 );
+                }
+                if (cmdOk) {
+                    for (uint8_t i=0; i<SERVOS_MAX; i++) {
+                        setServoFromHost(i, cmd.getParameter(i));
+                    }
+                }
+                return cmdOk;
+            }),
 
+    Command("servo_pulse", 2,
+            "set servo pulse length in HOST_MODE (two parameters: servoIndex < SERVOS_MAX, pulseLenUs)",
+            [](const Command & cmd) {
+                uint8_t servoIndex = cmd.getParameter(0);
+                uint32_t pulseLenUs = cmd.getParameter(1);
+                bool cmdOk = (servoIndex < SERVOS_MAX && pulseLenUs <= 3000);
+                if (cmdOk) {
+                    setServoFromHost(servoIndex, pulseLenUs);
+                }
+                return cmdOk;
+            }),
 
-static bool cliIsCmdChar(char ch) {
-    return isalnum(ch) || (ch == '_');
+    Command("failsafe_pulse", 2,
+            "set constant servo pulse length in FAILSAFE_MODE (two parameters: servoIndex < SERVOS_MAX, pulseLenUs)",
+            [](const Command & cmd) {
+                uint8_t servoIndex = cmd.getParameter(0);
+                uint32_t pulseLenUs = cmd.getParameter(1);
+                bool cmdOk = (servoIndex < SERVOS_MAX && pulseLenUs <= 3000);
+                if (cmdOk) {
+                    servos[servoIndex].setFailsafe(pulseLenUs);
+                }
+                return cmdOk;
+            }),
+
+    Command("fallback_timeout", 1,
+            "set timeout for entering fallback mode from host mode when the a servo has not received fresh data from the host (parameter: timeout in ms)",
+            [](const Command & cmd) {
+                fbTimeoutMs = cmd.getParameter(0);
+                return true;
+            }),
+
+    Command("fallback_force", 3,
+            "receiver channel to force fallback operation (three parameters: rxIndex, predicate (0: <, 1: >), pulseLenUs",
+            [](const Command & cmd) {
+                uint8_t rxIndex = cmd.getParameter(0);
+                uint8_t predicate = cmd.getParameter(1);
+                uint16_t pulseLenUs = cmd.getParameter(2);
+                bool cmdOk = (rxIndex < RX_MAX_CHANNEL && predicate < 2 && pulseLenUs <= 3000);
+                if (cmdOk) {
+                    fbForceChannel = rxIndex;
+                    fbForcePredicate = predicate;
+                    fbForcePulseLenUs = pulseLenUs;
+                }
+                return cmdOk;
+            }),
+
+    Command("servo_from_rx", 1,
+            "connect servo to receiver channel (two parameters: servoIndex, rxIndex)",
+            [](const Command & cmd) {
+                uint8_t servoIndex = cmd.getParameter(0);
+                uint8_t rxIndex = cmd.getParameter(1);
+                bool cmdOk = (rxIndex < RX_MAX_CHANNEL && servoIndex < SERVOS_MAX);
+                if (cmdOk) {
+                    rxForServo[servoIndex] = rxIndex;
+                }
+                return cmdOk;
+            }),
+
+    Command("rx", 0,
+            "report rc receiver channels",
+            [](const Command & cmd) {
+                transmitRx();
+                return true;
+            }),
+
+    Command("auto_rx", 1,
+            "automatic rc receiver reporting (parameter: 0: off; 1: onChange; >1: reporting interval in ms)",
+            [](const Command & cmd) {
+                autoTransmitRxIntervalMs = cmd.getParameter(0);
+                lastAutoTransmitStart = board.getTicks() - autoTransmitRxIntervalMs;
+                return true;
+            }),
+
+    Command("dump", 0,
+            "dump configuration",
+            [](const Command & cmd) {
+                for (uint8_t servoIndex=0; servoIndex<SERVOS_MAX; servoIndex++) {
+                    printf("failsafe %d %d\n", (int)servoIndex, (int)servos[servoIndex].getFailsafe());
+                }
+                printf("fallback_timeout %d\n", (int)fbTimeoutMs);
+                printf("fallback_force %d %d %d\n",
+                       (int)fbForceChannel,
+                       (int)fbForcePredicate,
+                       (int)fbForcePulseLenUs);
+                for (uint8_t servoIndex=0; servoIndex<SERVOS_MAX; servoIndex++) {
+                    printf("servo_from_rx %d %d\n", (int) servoIndex, (int) rxForServo[servoIndex]);
+                }
+                printf("autorx %d\n", (int)autoTransmitRxIntervalMs);
+                return true;
+            }),
+
+    Command("reset", 0,
+            "system reset",
+            [](const Command & cmd) {
+                printf("ok reset\n");
+                NVIC_SystemReset();
+                return true;
+            }),
+
+    Command("help", 0,
+            "show help text",
+            show_help),
+};
+
+bool show_help(const Command & cmd) {
+    printf("\n\n*** Move32 ***\n");
+    printf("\n*Modes (per servo)*\n");
+    printf("HOST_MODE: servo pulse is generated from host commands\n"
+           "      when host data is not timed out (fallback_timeout) and rc receiver does not force fallback (force_fallback)\n");
+    printf("FALLBACK_MODE: servo pulse is generated from rc receiver channel\n"
+           "          when host data is timed out (fallback_timeout) or rc receiver does force fallback (force_fallback)\n");
+    printf("FAILSAFE_MODE: preprogrammed constant servo pulse\n"
+           "          when no other mode is active\n");
+    printf("All signal from the receiver time out after %lu ms and fail to their preprogrammed failsafe pulses (failsafe_pulse)\n",
+            receiver.getTimeout());
+    printf("\n*Commands*\n");
+    std::for_each(std::begin(commands), std::end(commands), [&](Command &cmd) {
+        printf("%s - %s\n", cmd.getCommand(), cmd.getDescription());
+    });
+    return true;
 }
-
-/**
- * Tries to match a command line against a given command plus
- * a number of unsigned integer arguments.
- *
- * @param line command line to parse
- * @param cmd command to parse
- * @param numArgs number of integer arguments to parse
- * @return true of the command line matches the command, false otherwise
- */
-static bool cliParse(char *cmdLine, const char *cmd, int numArgs) {
-    bool isMatch = true;
-    int pos = 0;
-
-    // match the command
-    while (pos < SERIAL_RX_MAX && cliIsCmdChar(cmdLine[pos]) && cliIsCmdChar(cmd[pos]) ) {
-        isMatch &= (tolower(cmdLine[pos]) == tolower(cmd[pos]));
-        pos++;
-    }
-    isMatch &= (cmd[pos] == '\0');
-
-    // match the arguments
-    for (int argIndex = 0; argIndex < numArgs && argIndex < CMD_ARGS_MAX; argIndex++) {
-        // eat spaces
-        while (pos < SERIAL_RX_MAX && cmdLine[pos] == ' ') {
-            pos++;
-        }
-        // parse number
-        isMatch &= (pos < SERIAL_RX_MAX && isdigit(cmdLine[pos]));
-        int val = atoi(&(cmdLine[pos]));
-        isMatch &= (val >= 0 && val <= UINT16_MAX);
-        cmdArgs[argIndex] = val;
-        while (pos < SERIAL_RX_MAX && isdigit(cmdLine[pos])) {
-            pos++;
-        }
-    }
-
-    // eat spaces
-    while (pos < SERIAL_RX_MAX && cmdLine[pos] == ' ') {
-        pos++;
-    }
-
-    // this must be no remainder on the cmd line
-    isMatch &= cmdLine[pos] == '\0';
-
-    return isMatch;
-}
-
-
-/**
- * Returns an argument from the command line previously parsed,
- * @see cliParse
- * @param argIndex index of the command line argument
- * @return value of the command line argument
- */
-static uint32_t cliGetArg(uint8_t argIndex) {
-    uint32_t ret = 0;
-    if (argIndex < CMD_ARGS_MAX) {
-        ret = cmdArgs[argIndex];
-    }
-    return ret;
-}
-
-
-void cliProcess(char *cmdLine) {
-    if (cmdLine[0] == '#' || cmdLine[0] == '\0') {
-
-        // ignore comment or empty command
-
-    } else if (cliParse(cmdLine, "servos", SERVOS_MAX)) {
-
-        bool cmdOk = true;
-        for (uint8_t i=0; i<SERVOS_MAX; i++) {
-            cmdOk &= (cliGetArg(i) <= 3000 );
-        }
-        if (cmdOk) {
-            for (uint8_t i=0; i<SERVOS_MAX; i++) {
-                setServoFromHost(i, cliGetArg(i));
-            }
-            printf("ok servos");
-            for (uint8_t i=0; i<SERVOS_MAX; i++) {
-                printf(" %d", (int) cliGetArg(i));
-            }
-            printf("\n");
-        } else {
-            printf("error %s\n", cmdLine);
-        }
-
-    } else if (cliParse(cmdLine, "servo", 2)) {
-
-        uint8_t servoIndex = cliGetArg(0);
-        uint32_t pulseLenUs = cliGetArg(1);
-        if (servoIndex < SERVOS_MAX && pulseLenUs <= 3000) {
-            setServoFromHost(servoIndex, pulseLenUs);
-            printf("ok servo %d %d\n", (int)servoIndex, (int)pulseLenUs);
-        } else {
-            printf("error %s\n", cmdLine);
-        }
-
-    } else if (cliParse(cmdLine, "rx", 0)) {
-
-        transmitRx();
-
-    } else if (cliParse(cmdLine, "failsafe", 2)) {
-
-        uint8_t servoIndex = cliGetArg(0);
-        uint16_t pulseLenUs = cliGetArg(1);
-        if (servoIndex < SERVOS_MAX && pulseLenUs <= 3000) {
-            servos[servoIndex].setFailsafe(pulseLenUs);
-            printf("ok failsafe %d %d\n", (int)servoIndex, (int)pulseLenUs);
-        } else {
-            printf("error %s\n", cmdLine);
-        }
-
-    } else if (cliParse(cmdLine, "fallback_timeout", 1)) {
-
-        fbTimeoutMs = cliGetArg(0);
-        printf("ok fallback_timeout %d\n", (int)fbTimeoutMs);
-
-    } else if (cliParse(cmdLine, "fallback_force", 3)) {
-
-        uint8_t rxIndex = cliGetArg(0);
-        uint8_t predicate = cliGetArg(1);
-        uint16_t pulseLenUs = cliGetArg(2);
-        if (rxIndex < RX_MAX_CHANNEL && predicate < 2 && pulseLenUs <= 3000) {
-            fbForceChannel = rxIndex;
-            fbForcePredicate = predicate;
-            fbForcePulseLenUs = pulseLenUs;
-            printf("ok fallback_force %d %d %d\n",
-                   (int)fbForceChannel,
-                   (int)fbForcePredicate,
-                   (int)fbForcePulseLenUs);
-        } else {
-            printf("error %s\n", cmdLine);
-        }
-
-    } else if (cliParse(cmdLine, "servo_from_rx", 2)) {
-
-        uint8_t servoIndex = cliGetArg(0);
-        uint8_t rxIndex = cliGetArg(1);
-        if (rxIndex < RX_MAX_CHANNEL && servoIndex < SERVOS_MAX) {
-            rxForServo[servoIndex] = rxIndex;
-            printf("ok servo_from_rx %d %d\n", (int)servoIndex, (int)rxIndex);
-        } else {
-            printf("error %s\n", cmdLine);
-        }
-
-    } else if (cliParse(cmdLine, "autorx", 1)) {
-
-        autoTransmitRxIntervalMs = cliGetArg(0);
-        lastAutoTransmitStart = HAL_GetTick() - autoTransmitRxIntervalMs;
-        printf("ok autorx %d\n", (int)autoTransmitRxIntervalMs);
-
-    } else if (cliParse(cmdLine, "dump", 0)) {
-
-        printf("ok dump\n");
-        for (uint8_t servoIndex=0; servoIndex<SERVOS_MAX; servoIndex++) {
-            printf("failsafe %d %d\n", (int)servoIndex, (int)servos[servoIndex].getFailsafe());
-        }
-        printf("fallback_timeout %d\n", (int)fbTimeoutMs);
-        printf("fallback_force %d %d %d\n",
-               (int)fbForceChannel,
-               (int)fbForcePredicate,
-               (int)fbForcePulseLenUs);
-        for (uint8_t servoIndex=0; servoIndex<SERVOS_MAX; servoIndex++) {
-            printf("servo_from_rx %d %d\n", (int) servoIndex, (int) rxForServo[servoIndex]);
-        }
-        printf("autorx %d\n", (int)autoTransmitRxIntervalMs);
-
-    } else if (cliParse(cmdLine, "help", 0)) {
-
-        printf("ok help\n");
-        // TODO
-
-    } else if (cliParse(cmdLine, "reset", 0)) {
-
-        printf("ok reset\n");
-        NVIC_SystemReset();
-
-    } else {
-
-        printf("error %s\n", cmdLine);
-
-    }
-}
-
-
-Command cmdServos("servos", SERVOS_MAX, "servos pulseUs0 ... pulseUsN - Set pulse length of all servos");
 
 // **************************************************************************
 // Main
@@ -350,6 +295,8 @@ int main(void) {
     // rc input servo channels are now processed in the background
     // by peripherals, in ISRs and in rxUpdateCallback
 
+    printf("\n\nok Move32\n");
+
     // **********************************************************************
 
     for (uint8_t i=0; i<SERVOS_MAX; i++) {
@@ -364,20 +311,33 @@ int main(void) {
         // process commands
         char *received = serial.serialReceive();
         if (received != NULL) {
-            cliProcess(received);
+            bool isAlreadyParsed = false;
+            std::for_each(std::begin(commands), std::end(commands), [&](Command &cmd) {
+                if (cmd.parse(received)) {
+                    if (cmd.execute()) {
+                        printf("ok %s\n", cmd.getCommand());
+                    } else {
+                        printf("error %s\n", cmd.getCommand());
+                    }
+                    isAlreadyParsed = true;
+                };
+            });
+            if (!isAlreadyParsed) {
+                printf("error parsing \"%s\" - enter help for more info\n", received);
+            }
         }
 
         // generate output
-        bool isAutoTransmitTimerExpired = (HAL_GetTick()-lastAutoTransmitStart) >= autoTransmitRxIntervalMs;
+        bool isAutoTransmitTimerExpired = (board.getTicks()-lastAutoTransmitStart) >= autoTransmitRxIntervalMs;
         if ( (autoTransmitRxIntervalMs == 1 && wasLastRxChannelUpdated) ) {
             transmitRx();
-            lastAutoTransmitStart = HAL_GetTick();
+            lastAutoTransmitStart = board.getTicks();
             wasLastRxChannelUpdated = false;
         }
         if (autoTransmitRxIntervalMs > 1 && isAutoTransmitTimerExpired ) {
-                    transmitRx();
-                    lastAutoTransmitStart += autoTransmitRxIntervalMs;
-                    wasLastRxChannelUpdated = false;
+            transmitRx();
+            lastAutoTransmitStart += autoTransmitRxIntervalMs;
+            wasLastRxChannelUpdated = false;
         }
 
         // determine states

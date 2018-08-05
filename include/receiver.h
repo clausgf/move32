@@ -74,6 +74,8 @@ public:
         mTimeoutMs = 50;
     }
 
+    uint32_t getTimeout(void) { return mTimeoutMs; }
+
     /**
      * Timeout (in HAL Ticks or ms) for rx decoding - after the timeout
      * has expired without a signal, the the channel's state is considered unknown

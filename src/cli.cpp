@@ -5,3 +5,6 @@
  */
 
 #include "cli.h"
+
+
+uint16_t Command::sCmdArgs[CMD_ARGS_MAX];
