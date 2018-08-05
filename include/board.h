@@ -11,13 +11,17 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "stm32f1xx_hal.h"
-
 
 // **************************************************************************
 // Handles for accessing the peripherals via STHAL
 // **************************************************************************
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 extern ADC_HandleTypeDef hadc1;
 extern I2C_HandleTypeDef hi2c2;
@@ -29,8 +33,14 @@ extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim4;
+extern IWDG_HandleTypeDef hiwdg;
 
 extern UART_HandleTypeDef *syscall_UART_handle_ptr;
+
+#ifdef __cplusplus
+}
+#endif
+
 
 // **************************************************************************
 // Timer initialization
@@ -76,86 +86,316 @@ extern void icInit(TIM_HandleTypeDef *handle,
 
 
 // **************************************************************************
-// Serial communication via UART
+// Handling of the watchdog timer
 // **************************************************************************
 
-#define SERIAL_RX_MAX 40
+/**
+ * Abstraction for the watchdog timer which resets the system if not reset
+ * after TODO ms. The timer is automatically initialized and started after
+ * construction the object.
+ */
+class Watchdog {
+public:
+    Watchdog() {}
+
+    void init() {
+        /* Configure and start IWDG */
+        hiwdg.Instance = IWDG;
+        hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
+        hiwdg.Init.Reload = 2047;
+        HAL_IWDG_Init(&hiwdg);
+        HAL_IWDG_Start(&hiwdg);
+    }
+
+    /**
+     * Reset the watchdog timer, call this function periodically if you're alive!
+     */
+    void reset() {
+        HAL_IWDG_Refresh(&hiwdg);
+    }
+};
+
+
+// **************************************************************************
+// Handling of the GPIO digital I/O
+// **************************************************************************
 
 /**
- * Initialize serial communication via UART, include pins and peripheral clock
+ * Abstraction for a digital i/o pin on a given port; can switched to high/low.
  */
-extern void serialInit(void);
+class PortPin {
+public:
 
-/**
- * Return a line received from the serial UART interface or NULL
- * if not complete line was received. New data can be received
- * only after the application has fetched the previous data using
- * this function.
- * @return NULL or pointer to the received data
- */
-extern char *serialReceive();
+    PortPin(GPIO_TypeDef * gpioPort, const uint16_t gpioPin) :
+        mGpioPort(gpioPort), mGpioPin(gpioPin) { }
+
+    void init() {
+        // reset pin
+        HAL_GPIO_WritePin(mGpioPort, mGpioPin, GPIO_PIN_RESET);
+        // Configure GPIO pin
+        GPIO_InitTypeDef GPIO_InitStruct;
+        GPIO_InitStruct.Pin = mGpioPin;
+        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(mGpioPort, &GPIO_InitStruct);
+    }
+
+    /**
+     * Set state of port pin
+     * @param state (GPIO_PIN_SET or GPIO_PIN_RESET)
+     */
+    void set(GPIO_PinState state) {
+        HAL_GPIO_WritePin(mGpioPort, mGpioPin, state);
+    }
+
+    /**
+     * Toggle state of port pin
+     */
+    void toggle() {
+        HAL_GPIO_TogglePin(mGpioPort, mGpioPin);
+    }
+
+protected:
+    GPIO_TypeDef * mGpioPort;
+    const uint16_t mGpioPin;
+};
 
 
 // **************************************************************************
 // Handling of the on-board LEDs
 // **************************************************************************
 
-
 /**
- * Set state of LED0 (pin PB4)
- * @param state GPIO_PIN_SET or GPIO_PIN_RESET
+ * Abstraction for a LED connected to a digital i/o pin; can be switched on/off.
  */
-extern void led0Set(GPIO_PinState state);
+class Led : public PortPin {
+public:
 
-/**
- * Toggle state of LED0 (pin PB4)
- */
-extern void led0Toggle();
+    Led(GPIO_TypeDef * gpioPort, const uint16_t gpioPin) : PortPin(gpioPort, gpioPin) {}
 
-/**
- * Set state of LED1 (pin PB3)
- * @param state GPIO_PIN_SET or GPIO_PIN_RESET)
- */
-extern void led1Set(GPIO_PinState state);
+    /**
+     * Switch LED on (true) or off (false)
+     * @param state
+     */
+    void set(bool state) {
+        if (state) {
+            HAL_GPIO_WritePin(mGpioPort, mGpioPin, GPIO_PIN_RESET); // this switches the led on
+        } else {
+            HAL_GPIO_WritePin(mGpioPort, mGpioPin, GPIO_PIN_SET); // this switches the led off
+        }
+    }
 
-/**
- * Toggle state of LED1 (pin PB3)
- */
-extern void led1Toggle();
-
-/**
- * Set state of external beeper output (pin PA12)
- * @param state GPIO_PIN_SET or GPIO_PIN_RESET
- */
-extern void beeperSet(GPIO_PinState state);
-
-/**
- * Toggle state of external beeper output (pin PA12)
- */
-extern void beeperToggle();
-
-/**
- * Initialize the two on-board LEDs and the BEEP output, including GPIOs.
- */
-extern void ledInit();
+};
 
 
 // **************************************************************************
-// System initialization and error handling generated by CubeMX
+// Serial communication via UART
 // **************************************************************************
 
-extern void SystemClock_Config(void);
+#define SERIAL_RX_MAX 40
 
-extern void _Error_Handler(char *file, int line);
 
 /**
- * Initializes the board by calling @see SystemClock_Config,
- * @see ledInit,
- * @see serialInit
+ * Abstraction for a serial interface.
  */
+class Serial {
+public:
+    Serial() { }
+
+    void init() {
+        // enable peripheral clocks
+        __HAL_RCC_DMA1_CLK_ENABLE();
+        __HAL_RCC_USART1_CLK_ENABLE();
+        __HAL_RCC_GPIOA_CLK_ENABLE();
+
+        // configure I/O pins
+        GPIO_InitTypeDef gpioInitStruct;
+        gpioInitStruct.Pin = GPIO_PIN_9; // TX Pin
+        gpioInitStruct.Mode = GPIO_MODE_AF_PP;
+        gpioInitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+        HAL_GPIO_Init(GPIOA, &gpioInitStruct);
+        gpioInitStruct.Pin = GPIO_PIN_10; // RX Pin
+        gpioInitStruct.Mode = GPIO_MODE_INPUT;
+        gpioInitStruct.Pull = GPIO_NOPULL;
+        HAL_GPIO_Init(GPIOA, &gpioInitStruct);
+
+        // initialize UART
+        huart1.Instance = USART1;
+        huart1.Init.BaudRate = 115200; // 9600;
+        huart1.Init.WordLength = UART_WORDLENGTH_8B;
+        huart1.Init.StopBits = UART_STOPBITS_1;
+        huart1.Init.Parity = UART_PARITY_NONE;
+        huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+        huart1.Init.Mode = UART_MODE_TX_RX;
+        huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+        HAL_UART_Init(&huart1);
+
+        // set up & link DMA 1 channel 5 for rx
+        hdma_usart1_rx.Instance = DMA1_Channel5;
+        hdma_usart1_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
+        hdma_usart1_rx.Init.PeriphInc = DMA_PINC_DISABLE;
+        hdma_usart1_rx.Init.MemInc = DMA_MINC_DISABLE;
+        hdma_usart1_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+        hdma_usart1_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+        hdma_usart1_rx.Init.Mode = DMA_CIRCULAR;
+        hdma_usart1_rx.Init.Priority = DMA_PRIORITY_LOW;
+        HAL_DMA_Init(&hdma_usart1_rx);
+        __HAL_LINKDMA(&huart1, hdmarx, hdma_usart1_rx);
+
+        // set up & link DMA 1 channel 4 for tx
+        hdma_usart1_tx.Instance = DMA1_Channel4;
+        hdma_usart1_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
+        hdma_usart1_tx.Init.PeriphInc = DMA_PINC_DISABLE;
+        hdma_usart1_tx.Init.MemInc = DMA_MINC_ENABLE;
+        hdma_usart1_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+        hdma_usart1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
+        hdma_usart1_tx.Init.Mode = DMA_NORMAL;
+        hdma_usart1_tx.Init.Priority = DMA_PRIORITY_LOW;
+        HAL_DMA_Init(&hdma_usart1_tx);
+        __HAL_LINKDMA(&huart1, hdmatx, hdma_usart1_tx);
+
+        // enable IRQs
+        HAL_NVIC_SetPriority(DMA1_Channel5_IRQn, 0, 0);
+        HAL_NVIC_EnableIRQ(DMA1_Channel5_IRQn);
+        HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 0, 1);
+        HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
+        // enabling USART1_IRQn necessary to catch the TX complete
+        HAL_NVIC_SetPriority(USART1_IRQn, 0, 1);
+        HAL_NVIC_EnableIRQ(USART1_IRQn);
+
+        // Start reception
+        memset(mSerialRxReceived, 0, SERIAL_RX_MAX);
+        mSerialRxIndex = 0;
+        __HAL_UART_FLUSH_DRREGISTER(&huart1);
+        HAL_UART_Receive_DMA(&huart1, &mSerialRxDmaBuffer, 1);
+    }
+
+    char *serialReceive() {
+        static char *localBuffer[SERIAL_RX_MAX];
+        char *ret = NULL;
+        if (mSerialRxIndex < 0) {
+            memcpy(localBuffer, mSerialRxReceived, SERIAL_RX_MAX);
+            memset(mSerialRxReceived, 0, SERIAL_RX_MAX);
+            mSerialRxIndex = 0;
+            ret = (char *)localBuffer;
+        }
+        return ret;
+    }
+
+    void rxCompleteFromIsr() {
+        if (mSerialRxIndex < 0) {
+            // ignore characters received before the last line was accepted
+        } else {
+            if (mSerialRxDmaBuffer == '\r') {
+                // ignore
+            } else if (mSerialRxDmaBuffer == '\n') {
+                mSerialRxReceived[mSerialRxIndex] = 0;
+                mSerialRxIndex = -1;
+            } else {
+                mSerialRxReceived[mSerialRxIndex] = mSerialRxDmaBuffer;
+                // prepare for reception of next character, handle buffer overflows
+                if (mSerialRxIndex <= SERIAL_RX_MAX - 1) {
+                    mSerialRxIndex++;
+                }
+            }
+        }
+    }
+
+private:
+    uint8_t mSerialRxDmaBuffer = 0;
+    uint8_t mSerialRxReceived[SERIAL_RX_MAX];
+    int32_t mSerialRxIndex = 0;
+};
+
+
+// **************************************************************************
+// TODO I2C Communication
+// **************************************************************************
+
+class I2c {
+public:
+
+    I2c() { }
+
+    void init() {
+        __HAL_RCC_I2C2_CLK_ENABLE();
+
+        // PB10  I2C2_SCL
+        // PB11  I2C2_SDA
+        GPIO_InitTypeDef gpioInitStruct;
+        gpioInitStruct.Pin = GPIO_PIN_10 | GPIO_PIN_11;
+        gpioInitStruct.Mode = GPIO_MODE_AF_OD;
+        gpioInitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+        HAL_GPIO_Init(GPIOB, &gpioInitStruct);
+    }
+};
+
+
+// **************************************************************************
+// Board
+// **************************************************************************
+
+
+extern Watchdog watchdog;
+extern Led led0;
+extern Led led1;
+extern PortPin beeper;
+extern Serial serial;
+extern I2c i2c;
+
+
+/**
+ * Abstraction of some general functions of the microcontroller and the board;
+ * please note that the other classes/objects defined in this module (plus the
+ * receiver and servo modules) are also board specific.
+ *
+ * Design decision: Every piece of hardware provides an init() function; these
+ * functions are called in boardInit. Compared to the RAII pattern, this
+ * allows better control of the initialization order over several modules.
+ */
+class Naze32 {
+public:
+
+    Naze32() { }
+
+    void init() { }
+
+    void reset() {
+        NVIC_SystemReset();
+    }
+
+    /**
+     * Fatal error: output a message, blink the leds for a few seconds,
+     * and reboot.
+     */
+    void fatal(const char *filename, int lineNo, const char *msg) {
+        printf("\n*** Fatal error in file %s line %d: %s\n", filename, lineNo, msg);
+        for (int i=0; i<6; i++) {
+            // blink both LEDs and wait 250 MS
+            led0.set(false);
+            led1.set(true);
+            HAL_Delay(250);
+            // blink both LEDs and wait 250 MS
+            led0.set(true);
+            led1.set(false);
+            HAL_Delay(250);
+        }
+        reset();
+    }
+
+private:
+
+};
+
+
+// **************************************************************************
+
+extern Naze32 board;
+
+extern void _Error_Handler(char *file, int lineNo);
 extern void boardInit();
 
-
 // **************************************************************************
+
 
 #endif //MOVE32_BOARD_H

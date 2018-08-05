@@ -347,7 +347,10 @@ int main(void) {
     //receiverInit();
     while (1) {
         printf("abc\n");
-        HAL_Delay(500);
+        led0.set(true);
+        HAL_Delay(250);
+        led0.set(false);
+        HAL_Delay(250);
     }
     printf("\nSystemCoreClock = %lu\n", SystemCoreClock);
 
