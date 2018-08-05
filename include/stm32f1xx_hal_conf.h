@@ -5,7 +5,7 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; COPYRIGHT(c) 2017 STMicroelectronics</center></h2>
+  * <h2><center>&copy; COPYRIGHT(c) 2018 STMicroelectronics</center></h2>
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -71,9 +71,10 @@
 /*#define HAL_PCD_MODULE_ENABLED   */
 /*#define HAL_HCD_MODULE_ENABLED   */
 /*#define HAL_PWR_MODULE_ENABLED   */
-#define HAL_RCC_MODULE_ENABLED
+/*#define HAL_RCC_MODULE_ENABLED   */
 /*#define HAL_RTC_MODULE_ENABLED   */
 /*#define HAL_SD_MODULE_ENABLED   */
+/*#define HAL_MMC_MODULE_ENABLED   */
 /*#define HAL_SDRAM_MODULE_ENABLED   */
 /*#define HAL_SMARTCARD_MODULE_ENABLED   */
 #define HAL_SPI_MODULE_ENABLED
@@ -82,6 +83,7 @@
 #define HAL_UART_MODULE_ENABLED
 /*#define HAL_USART_MODULE_ENABLED   */
 /*#define HAL_WWDG_MODULE_ENABLED   */
+/*#define HAL_EXTI_MODULE_ENABLED   */
 
 #define HAL_CORTEX_MODULE_ENABLED
 #define HAL_DMA_MODULE_ENABLED
@@ -96,7 +98,6 @@
   *        This value is used by the RCC HAL module to compute the system frequency
   *        (when HSE is used as system clock source, directly or through the PLL).  
   */
-// TODO HSE default modified to 12 MHz !!!
 #if !defined  (HSE_VALUE) 
   #define HSE_VALUE    ((uint32_t)12000000) /*!< Value of the External oscillator in Hz */
 #endif /* HSE_VALUE */
@@ -113,6 +114,15 @@
 #if !defined  (HSI_VALUE)
   #define HSI_VALUE    ((uint32_t)8000000) /*!< Value of the Internal oscillator in Hz*/
 #endif /* HSI_VALUE */
+
+/**
+  * @brief Internal Low Speed oscillator (LSI) value.
+  */
+#if !defined  (LSI_VALUE) 
+ #define LSI_VALUE               40000U    /*!< LSI Typical Value in Hz */
+#endif /* LSI_VALUE */                     /*!< Value of the Internal Low Speed oscillator in Hz
+                                                The real value may vary depending on the variations
+                                                in voltage and temperature. */
 
 /**
   * @brief External Low Speed oscillator (LSE) value.
@@ -143,7 +153,7 @@
   * @brief Uncomment the line below to expanse the "assert_param" macro in the 
   *        HAL drivers code
   */
-/* #define USE_FULL_ASSERT    1 */
+/* #define USE_FULL_ASSERT    1U */
 
 /* ################## Ethernet peripheral configuration ##################### */
 
@@ -209,6 +219,10 @@
 #ifdef HAL_RCC_MODULE_ENABLED
  #include "stm32f1xx_hal_rcc.h"
 #endif /* HAL_RCC_MODULE_ENABLED */
+
+#ifdef HAL_EXTI_MODULE_ENABLED
+ #include "stm32f1xx_hal_exti.h"
+#endif /* HAL_EXTI_MODULE_ENABLED */
 
 #ifdef HAL_GPIO_MODULE_ENABLED
  #include "stm32f1xx_hal_gpio.h"
@@ -285,6 +299,10 @@
 #ifdef HAL_SD_MODULE_ENABLED
  #include "stm32f1xx_hal_sd.h"
 #endif /* HAL_SD_MODULE_ENABLED */  
+
+#ifdef HAL_MMC_MODULE_ENABLED
+ #include "stm32f1xx_hal_mmc.h"
+#endif /* HAL_MMC_MODULE_ENABLED */
 
 #ifdef HAL_NAND_MODULE_ENABLED
  #include "stm32f1xx_hal_nand.h"

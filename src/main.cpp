@@ -266,8 +266,10 @@ bool show_help(const Command & cmd) {
            "          when host data is timed out (fallback_timeout) or rc receiver does force fallback (force_fallback)\n");
     printf("FAILSAFE_MODE: preprogrammed constant servo pulse\n"
            "          when no other mode is active\n");
-    printf("All signal from the receiver time out after %lu ms and fail to their preprogrammed failsafe pulses (failsafe_pulse)\n",
+    printf("All signals from the receiver time out after %lu ms and fail to their preprogrammed failsafe pulses (failsafe_pulse).\n",
             receiver.getTimeout());
+    printf("Move32 is configured for SERVOS_MAX=%d servo outputs.\n",
+           SERVOS_MAX);
     printf("\n*Commands*\n");
     std::for_each(std::begin(commands), std::end(commands), [&](Command &cmd) {
         printf("%s - %s\n", cmd.getCommand(), cmd.getDescription());
@@ -278,7 +280,6 @@ bool show_help(const Command & cmd) {
 // **************************************************************************
 // Main
 // **************************************************************************
-
 
 int main(void) {
     // Reset of all peripherals, Initializes the Flash interface and Systick.
@@ -306,7 +307,7 @@ int main(void) {
     wasLastRxChannelUpdated = false;
     // main loop
     while (1) {
-        // TODO watchdogReset();
+        watchdog.reset();
 
         // process commands
         char *received = serial.serialReceive();

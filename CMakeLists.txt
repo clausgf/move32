@@ -1,7 +1,8 @@
 set(TOOLCHAIN_PREFIX "/usr/local")
 set(CMAKE_TOOLCHAIN_FILE "~/git/stm32-cmake/cmake/gcc_stm32.cmake")
-set(STM32Cube_DIR "~/STM32Cube/Repository/STM32Cube_FW_F1_V1.4.0")
+#set(STM32Cube_DIR "~/STM32Cube/Repository/STM32Cube_FW_F1_V1.4.0")
 #set(STM32Cube_DIR "~/STM32Cube/Repository/STM32Cube_FW_F1_V1.6.1")
+set(STM32Cube_DIR "./move32-cubemx")
 set(STM32_CHIP STM32F103CBT6)
 set(CMAKE_BUILD_TYPE "Debug")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "cmake" "../cmake" "../../cmake")
@@ -13,7 +14,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 ENABLE_LANGUAGE(ASM)
 
 FIND_PACKAGE(CMSIS REQUIRED)
-FIND_PACKAGE(STM32HAL COMPONENTS dma iwdg gpio tim adc i2c uart REQUIRED)
+FIND_PACKAGE(STM32HAL COMPONENTS dma iwdg gpio tim adc i2c spi uart REQUIRED)
 
 INCLUDE_DIRECTORIES(
     ${CMAKE_CURRENT_SOURCE_DIR}

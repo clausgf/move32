@@ -36,7 +36,7 @@ Led led0(LED0_GPIO_Port, LED0_Pin);
 Led led1(LED1_GPIO_Port, LED1_Pin);
 PortPin beeper(BEEP_GPIO_Port, BEEP_Pin);
 Serial serial;
-I2c i2c;
+
 
 void SystemClock_Config(void);
 
@@ -44,7 +44,7 @@ void boardInit() {
     // Configure system clock system including PLL, AHB and APB clocks
     SystemClock_Config();
     board.init();
-    //watchdog.init();
+    watchdog.init();
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
     led0.init();
@@ -54,8 +54,8 @@ void boardInit() {
     __HAL_RCC_USART1_CLK_ENABLE();
     //__HAL_RCC_GPIOA_CLK_ENABLE();
     serial.init();
-    __HAL_RCC_I2C2_CLK_ENABLE();
-    i2c.init();
+    //__HAL_RCC_I2C2_CLK_ENABLE();
+    //i2c.init();
 }
 
 void _Error_Handler(char *file, int line) {
@@ -131,7 +131,7 @@ void icInit(TIM_HandleTypeDef *handle,
 
 
 // **************************************************************************
-// UART IRQ, DMA and STHAL callback handling
+// IRQ, DMA and STHAL callback handling for UART, ADC, I2C, SPI
 // **************************************************************************
 
 #ifdef __cplusplus
@@ -172,6 +172,27 @@ void DMA1_Channel4_IRQHandler(void) {
     HAL_DMA_IRQHandler(&hdma_usart1_tx);
 }
 
+
+void ADC1_2_IRQHandler(void)
+{
+    HAL_ADC_IRQHandler(&hadc1);
+}
+
+void I2C2_EV_IRQHandler(void)
+{
+    HAL_I2C_EV_IRQHandler(&hi2c2);
+}
+
+void I2C2_ER_IRQHandler(void)
+{
+    HAL_I2C_ER_IRQHandler(&hi2c2);
+}
+
+void SPI2_IRQHandler(void)
+{
+    HAL_SPI_IRQHandler(&hspi2);
+}
+
 #ifdef __cplusplus
 }
 #endif
@@ -185,10 +206,11 @@ void DMA1_Channel4_IRQHandler(void) {
 void SystemClock_Config(void) {
     // Initializes the CPU, AHB and APB bus clocks
     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
     RCC_OscInitStruct.HSEState = RCC_HSE_ON;
     RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
-    // Why? RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+    RCC_OscInitStruct.HSIState = RCC_HSI_ON; // Why?
+    RCC_OscInitStruct.LSIState = RCC_LSI_ON;
     RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
     RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
     RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;

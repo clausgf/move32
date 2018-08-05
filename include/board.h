@@ -91,28 +91,42 @@ extern void icInit(TIM_HandleTypeDef *handle,
 
 /**
  * Abstraction for the watchdog timer which resets the system if not reset
- * after TODO ms. The timer is automatically initialized and started after
+ * after WATCHDOG_INTERVAL ms.
+ * The timer is automatically initialized and started after
  * construction the object.
+ *
+ * WATCHDOG_INTERVAL = 1023 * 8 / 40 kHz ~ 1600 ms
  */
 class Watchdog {
 public:
-    Watchdog() {}
-
-    void init() {
-        /* Configure and start IWDG */
-        hiwdg.Instance = IWDG;
-        hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
-        hiwdg.Init.Reload = 2047;
-        HAL_IWDG_Init(&hiwdg);
-        HAL_IWDG_Start(&hiwdg);
+    Watchdog() {
+        mWasResetByWatchdog = __HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST) != 0;
     }
+
+    // TODO watchdog timer for some reason does not reset the system
+    void init() {/*
+        // Configure and start IWDG
+        hiwdg.Instance = IWDG;
+        hiwdg.Init.Prescaler = IWDG_PRESCALER_8;
+        hiwdg.Init.Reload = 1023;
+        if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
+        {
+            _Error_Handler((char *)__FILE__, __LINE__);
+        }
+    */}
+
+    bool getWasResetByWatchdog() { return mWasResetByWatchdog; }
 
     /**
-     * Reset the watchdog timer, call this function periodically if you're alive!
+     * Reset the watchdog timer, call this function periodically if you're
+     * still alive!
      */
     void reset() {
-        HAL_IWDG_Refresh(&hiwdg);
+        // TODO HAL_IWDG_Refresh(&hiwdg);
     }
+
+private:
+    bool mWasResetByWatchdog;
 };
 
 
@@ -205,14 +219,14 @@ public:
     void init() {
         // configure I/O pins
         GPIO_InitTypeDef gpioInitStruct;
-        gpioInitStruct.Pin = GPIO_PIN_9; // TX Pin
+        gpioInitStruct.Pin = TX_Pin;
         gpioInitStruct.Mode = GPIO_MODE_AF_PP;
         gpioInitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-        HAL_GPIO_Init(GPIOA, &gpioInitStruct);
-        gpioInitStruct.Pin = GPIO_PIN_10; // RX Pin
+        HAL_GPIO_Init(TX_GPIO_Port, &gpioInitStruct);
+        gpioInitStruct.Pin = RX_Pin;
         gpioInitStruct.Mode = GPIO_MODE_INPUT;
         gpioInitStruct.Pull = GPIO_NOPULL;
-        HAL_GPIO_Init(GPIOA, &gpioInitStruct);
+        HAL_GPIO_Init(RX_GPIO_Port, &gpioInitStruct);
 
         // initialize UART
         huart1.Instance = USART1;
@@ -234,7 +248,10 @@ public:
         hdma_usart1_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
         hdma_usart1_rx.Init.Mode = DMA_CIRCULAR;
         hdma_usart1_rx.Init.Priority = DMA_PRIORITY_LOW;
-        HAL_DMA_Init(&hdma_usart1_rx);
+        if (HAL_DMA_Init(&hdma_usart1_rx) != HAL_OK)
+        {
+            _Error_Handler((char *)__FILE__, __LINE__);
+        }
         __HAL_LINKDMA(&huart1, hdmarx, hdma_usart1_rx);
 
         // set up & link DMA 1 channel 4 for tx
@@ -246,7 +263,10 @@ public:
         hdma_usart1_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
         hdma_usart1_tx.Init.Mode = DMA_NORMAL;
         hdma_usart1_tx.Init.Priority = DMA_PRIORITY_LOW;
-        HAL_DMA_Init(&hdma_usart1_tx);
+        if (HAL_DMA_Init(&hdma_usart1_tx) != HAL_OK)
+        {
+            _Error_Handler((char *)__FILE__, __LINE__);
+        }
         __HAL_LINKDMA(&huart1, hdmatx, hdma_usart1_tx);
 
         // enable IRQs
@@ -320,6 +340,87 @@ public:
         gpioInitStruct.Mode = GPIO_MODE_AF_OD;
         gpioInitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
         HAL_GPIO_Init(GPIOB, &gpioInitStruct);
+
+        hi2c2.Instance = I2C2;
+        hi2c2.Init.ClockSpeed = 100000;
+        hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
+        hi2c2.Init.OwnAddress1 = 0;
+        hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+        hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+        hi2c2.Init.OwnAddress2 = 0;
+        hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+        hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+        if (HAL_I2C_Init(&hi2c2) != HAL_OK)
+        {
+            _Error_Handler((char *)__FILE__, __LINE__);
+        }
+    }
+};
+
+
+// **************************************************************************
+// TODO Spi Communication
+// **************************************************************************
+
+class Spi {
+public:
+
+    Spi() { }
+
+    void init() {
+        hspi2.Instance = SPI2;
+        hspi2.Init.Mode = SPI_MODE_MASTER;
+        hspi2.Init.Direction = SPI_DIRECTION_2LINES;
+        hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
+        hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
+        hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
+        hspi2.Init.NSS = SPI_NSS_SOFT;
+        hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+        hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
+        hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
+        hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+        hspi2.Init.CRCPolynomial = 10;
+        if (HAL_SPI_Init(&hspi2) != HAL_OK)
+        {
+            _Error_Handler((char *)__FILE__, __LINE__);
+        }
+    }
+};
+
+
+// **************************************************************************
+// TODO Adc
+// **************************************************************************
+
+class Adc {
+public:
+
+    Adc() { }
+
+    void init() {
+        ADC_ChannelConfTypeDef sConfig;
+
+        // Common config
+        hadc1.Instance = ADC1;
+        hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+        hadc1.Init.ContinuousConvMode = DISABLE;
+        hadc1.Init.DiscontinuousConvMode = DISABLE;
+        hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+        hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+        hadc1.Init.NbrOfConversion = 1;
+        if (HAL_ADC_Init(&hadc1) != HAL_OK)
+        {
+            _Error_Handler((char *)__FILE__, __LINE__);
+        }
+
+        // Configure Regular Channel
+        sConfig.Channel = ADC_CHANNEL_4;
+        sConfig.Rank = ADC_REGULAR_RANK_1;
+        sConfig.SamplingTime = ADC_SAMPLETIME_71CYCLES_5;
+        if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+        {
+            _Error_Handler((char *)__FILE__, __LINE__);
+        }
     }
 };
 
