@@ -45,10 +45,16 @@ void boardInit() {
     SystemClock_Config();
     board.init();
     //watchdog.init();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
     led0.init();
     led1.init();
     beeper.init();
+    __HAL_RCC_DMA1_CLK_ENABLE();
+    __HAL_RCC_USART1_CLK_ENABLE();
+    //__HAL_RCC_GPIOA_CLK_ENABLE();
     serial.init();
+    __HAL_RCC_I2C2_CLK_ENABLE();
     i2c.init();
 }
 
@@ -128,12 +134,15 @@ void icInit(TIM_HandleTypeDef *handle,
 // UART IRQ, DMA and STHAL callback handling
 // **************************************************************************
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Called within the STHAL UART/DMA interrupt handlers on rx complete.
  * @param huart The UART to process
  */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     __HAL_UART_FLUSH_DRREGISTER(&huart1); // Clear the buffer to prevent overrun
     serial.rxCompleteFromIsr();
 }
@@ -141,8 +150,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 /**
  * USART1 IRQ handler to catch the TX complete
  */
-void USART1_IRQHandler(void)
-{
+void USART1_IRQHandler(void) {
     HAL_UART_IRQHandler(&huart1);
 }
 
@@ -151,8 +159,7 @@ void USART1_IRQHandler(void)
  * That handler calls the respective HAL UART handlers, which can activate
  * user callbacks.
  */
-void DMA1_Channel5_IRQHandler(void)
-{
+void DMA1_Channel5_IRQHandler(void) {
     HAL_DMA_IRQHandler(&hdma_usart1_rx);
 }
 
@@ -161,10 +168,13 @@ void DMA1_Channel5_IRQHandler(void)
  * That handler calls the respective HAL UART handlers, which can activate
  * user callbacks.
  */
-void DMA1_Channel4_IRQHandler(void)
-{
+void DMA1_Channel4_IRQHandler(void) {
     HAL_DMA_IRQHandler(&hdma_usart1_tx);
 }
+
+#ifdef __cplusplus
+}
+#endif
 
 
 // **************************************************************************
@@ -215,3 +225,4 @@ void SystemClock_Config(void) {
     // SysTick_IRQn interrupt configuration
     HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
 }
+

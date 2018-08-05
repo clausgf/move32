@@ -203,11 +203,6 @@ public:
     Serial() { }
 
     void init() {
-        // enable peripheral clocks
-        __HAL_RCC_DMA1_CLK_ENABLE();
-        __HAL_RCC_USART1_CLK_ENABLE();
-        __HAL_RCC_GPIOA_CLK_ENABLE();
-
         // configure I/O pins
         GPIO_InitTypeDef gpioInitStruct;
         gpioInitStruct.Pin = GPIO_PIN_9; // TX Pin
@@ -264,18 +259,18 @@ public:
         HAL_NVIC_EnableIRQ(USART1_IRQn);
 
         // Start reception
-        memset(mSerialRxReceived, 0, SERIAL_RX_MAX);
+        memset((void *)mSerialRxReceived, 0, SERIAL_RX_MAX);
         mSerialRxIndex = 0;
         __HAL_UART_FLUSH_DRREGISTER(&huart1);
-        HAL_UART_Receive_DMA(&huart1, &mSerialRxDmaBuffer, 1);
+        HAL_UART_Receive_DMA(&huart1, (uint8_t *)&mSerialRxDmaBuffer, 1);
     }
 
     char *serialReceive() {
         static char *localBuffer[SERIAL_RX_MAX];
         char *ret = NULL;
         if (mSerialRxIndex < 0) {
-            memcpy(localBuffer, mSerialRxReceived, SERIAL_RX_MAX);
-            memset(mSerialRxReceived, 0, SERIAL_RX_MAX);
+            memcpy(localBuffer, (const void *)mSerialRxReceived, SERIAL_RX_MAX);
+            memset((void *)mSerialRxReceived, 0, SERIAL_RX_MAX);
             mSerialRxIndex = 0;
             ret = (char *)localBuffer;
         }
@@ -294,7 +289,7 @@ public:
             } else {
                 mSerialRxReceived[mSerialRxIndex] = mSerialRxDmaBuffer;
                 // prepare for reception of next character, handle buffer overflows
-                if (mSerialRxIndex <= SERIAL_RX_MAX - 1) {
+                if (mSerialRxIndex < SERIAL_RX_MAX - 1) {
                     mSerialRxIndex++;
                 }
             }
@@ -302,9 +297,9 @@ public:
     }
 
 private:
-    uint8_t mSerialRxDmaBuffer = 0;
-    uint8_t mSerialRxReceived[SERIAL_RX_MAX];
-    int32_t mSerialRxIndex = 0;
+    volatile uint8_t mSerialRxDmaBuffer = 0;
+    volatile uint8_t mSerialRxReceived[SERIAL_RX_MAX];
+    volatile int32_t mSerialRxIndex = 0;
 };
 
 
@@ -318,8 +313,6 @@ public:
     I2c() { }
 
     void init() {
-        __HAL_RCC_I2C2_CLK_ENABLE();
-
         // PB10  I2C2_SCL
         // PB11  I2C2_SDA
         GPIO_InitTypeDef gpioInitStruct;

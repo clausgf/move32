@@ -21,6 +21,10 @@ void receiverInit() {
 // Input Capture interrupt handling for rx decoding
 // **************************************************************************
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Callback called within the HAL's timer interrupt handler
  * Beware of the poor HAL design (again):
@@ -48,4 +52,6 @@ void TIM3_IRQHandler(void) {
     HAL_TIM_IRQHandler(&htim3);
 }
 
-
+#ifdef __cplusplus
+}
+#endif

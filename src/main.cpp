@@ -343,15 +343,8 @@ int main(void) {
 
     // configure the board including clock, watchdog, leds and serial
     boardInit();
-    //servosInit();
-    //receiverInit();
-    while (1) {
-        printf("abc\n");
-        led0.set(true);
-        HAL_Delay(250);
-        led0.set(false);
-        HAL_Delay(250);
-    }
+    servosInit();
+    receiverInit();
     printf("\nSystemCoreClock = %lu\n", SystemCoreClock);
 
     // rc input servo channels are now processed in the background
