@@ -10,8 +10,11 @@ Move32 provides the following features:
 - serial communications for host communications
 - flexible host, fallback and failsafe modes for controlling servos/ESCs via the host for autonomous functions or via a remote for teaching/learning
 
-TODO: Add a system context diagram
+TODO: Add a system context diagram.
+
 TODO: Add a wiring diagram for the Naze32.
+
+Technically, Move32 is written in C++, uses a Cmake based build system from [ObKo/stm32-cmake](https://github.com/ObKo/stm32-cmake), implements some newlibc system calls and otherwise relies on STM's STHAL library.
 
 ## Functions
 
@@ -26,6 +29,7 @@ The LEDs on the Naze32 board show you whether the system is alive and in host, f
 
 - Parameters for the serial interface: 115200 Baud, 8N1
 - Commands are not echoed while typing, but confirmed after hitting Enter. The status after entering a command is either _ok_ or _error_.
+- Use `help` to show a list of commands, `dump` to display the current settings.
 - The data type for servo positions is the underlying pulse
   length in microseconds.
   Values for most remotes: 1000 (left) - 1500 (middle) - 2000 (right). Individual calibration is recommended.
